@@ -21,13 +21,13 @@ services:
       retries: 3
 
   ferron:
-    image: ferronserver/ferron:latest
+    image: ferronserver/ferron:2
     restart: 'no'
     depends_on:
       demo-site:
         condition: service_healthy
     ports:
-      - '8080:8080'
+      - '8080:80'
     read_only: true
     tmpfs:
       - /tmp:size=16m,noexec,nosuid
@@ -35,6 +35,8 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    volumes:
+      - ./ferron-test/ferron.kdl:/etc/ferron.kdl:ro
     networks:
       - web_edge
 
