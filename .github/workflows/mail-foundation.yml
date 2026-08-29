@@ -1,0 +1,58 @@
+name: Mail Foundation
+
+on:
+  push:
+    branches: [main, 'mail/**']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  static-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate compose file
+        run: docker compose -f infra/mailserver/compose.yaml config --quiet
+
+      - name: Run static mail security contract
+        run: bash tests/mail-flow/test-config.sh
+
+  runtime-mail-flow:
+    runs-on: ubuntu-latest
+    needs: static-security
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Start isolated mailserver
+        run: docker compose -f infra/mailserver/compose.yaml up -d
+
+      - name: Wait for container health
+        run: |
+          for i in {1..60}; do
+            status="$(docker inspect --format='{{.State.Health.Status}}' mailserver 2>/dev/null || true)"
+            if [ "$status" = "healthy" ]; then exit 0; fi
+            sleep 5
+          done
+          docker compose -f infra/mailserver/compose.yaml ps
+          docker compose -f infra/mailserver/compose.yaml logs --no-color
+          exit 1
+
+      - name: Run runtime contract
+        run: bash tests/mail-flow/test-runtime.sh
+
+      - name: Collect diagnostics
+        if: always()
+        run: docker compose -f infra/mailserver/compose.yaml ps && docker compose -f infra/mailserver/compose.yaml logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f infra/mailserver/compose.yaml down -v
