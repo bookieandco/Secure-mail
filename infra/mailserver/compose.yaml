@@ -1,0 +1,45 @@
+services:
+  mailserver:
+    image: ghcr.io/docker-mailserver/docker-mailserver:v15.1.0
+    container_name: secure-mail-mailserver
+    hostname: ${MAILSERVER_HOSTNAME:?set MAILSERVER_HOSTNAME}
+    env_file:
+      - ./mailserver.env
+    # MAIL-1 is an isolated local test environment. Bind only to loopback.
+    # Public SMTP/IMAP exposure is prohibited until the security gates pass.
+    ports:
+      - "127.0.0.1:2525:25"
+      - "127.0.0.1:2465:465"
+      - "127.0.0.1:2587:587"
+      - "127.0.0.1:2993:993"
+    volumes:
+      - ./docker-data/dms/mail-data:/var/mail
+      - ./docker-data/dms/mail-state:/var/mail-state
+      - ./docker-data/dms/mail-logs:/var/log/mail
+      - ./docker-data/dms/config:/tmp/docker-mailserver
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped
+    stop_grace_period: 1m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+    networks:
+      - mail_edge
+      - mail_security
+    healthcheck:
+      test: ["CMD-SHELL", "ss --listening --ipv4 --tcp | grep --silent ':smtp' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+networks:
+  mail_edge:
+    internal: true
+  mail_security:
+    internal: true
