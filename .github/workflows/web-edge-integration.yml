@@ -1,0 +1,74 @@
+name: Web Edge Integration
+
+on:
+  pull_request:
+    paths:
+      - 'web/**'
+      - 'packages/mail-domain/**'
+      - 'packages/mail-types/**'
+      - 'tests/security/**'
+      - '.github/workflows/web-edge-integration.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'packages/mail-domain/**'
+      - 'packages/mail-types/**'
+      - 'tests/security/**'
+      - '.github/workflows/web-edge-integration.yml'
+
+jobs:
+  edge-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Compose configuration
+        run: docker compose -f web/compose.edge-test.yml config
+
+      - name: Build and start web edge
+        working-directory: web
+        run: docker compose -f compose.edge-test.yml up -d --build
+
+      - name: Wait for edge
+        run: |
+          for i in $(seq 1 30); do
+            if curl --fail --silent --show-error \
+              -H 'Host: demo.example.test' \
+              http://127.0.0.1:8080/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f web/compose.edge-test.yml ps
+          docker compose -f web/compose.edge-test.yml logs
+          exit 1
+
+      - name: Verify routed content
+        run: |
+          curl --fail --silent --show-error \
+            -H 'Host: demo.example.test' \
+            http://127.0.0.1:8080/ | grep -F 'Disposable web workload is online.'
+
+      - name: Verify unknown host is not routed
+        run: |
+          code=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            -H 'Host: unknown.example.test' \
+            http://127.0.0.1:8080/)
+          test "$code" != "200"
+
+      - name: Verify workload hardening
+        run: |
+          docker inspect $(docker compose -f web/compose.edge-test.yml ps -q demo-site) \
+            --format '{{.HostConfig.ReadonlyRootfs}} {{.HostConfig.SecurityOpt}} {{.HostConfig.CapDrop}}' \
+            | grep -F 'true'
+
+      - name: Collect logs on failure
+        if: failure()
+        run: docker compose -f web/compose.edge-test.yml logs --no-color
+
+      - name: Tear down
+        if: always()
+        working-directory: web
+        run: docker compose -f compose.edge-test.yml down --volumes --remove-orphans
