@@ -1,3 +1,0 @@
-demo.example.test {
-  proxy_pass http://demo-site:8080
-}
