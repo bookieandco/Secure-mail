@@ -1,5 +1,10 @@
+import type { MailDomain } from "../mail-types/domain";
 import type { Mailbox } from "../mail-types/mailbox";
-import type { Domain } from "../mail-types/domain";
+
+export type ProvisionedMailbox = Mailbox & {
+  /** Password verifier/hash owned by the credential boundary. */
+  readonly passwordHash: string;
+};
 
 export type DmsProjection = {
   accounts: Array<{ address: string; passwordHash: string }>;
@@ -8,21 +13,24 @@ export type DmsProjection = {
 
 /**
  * Pure projection only. It never executes setup, writes files, or talks to Docker.
- * Password hashes are supplied by the credential boundary; plaintext passwords are
- * intentionally not accepted here.
+ * Plaintext passwords are intentionally not accepted here.
  */
 export function projectToDms(
-  domains: readonly Domain[],
-  mailboxes: readonly Mailbox[],
+  domains: readonly MailDomain[],
+  mailboxes: readonly ProvisionedMailbox[],
 ): DmsProjection {
-  const activeDomains = new Set(
-    domains.filter((d) => d.status === "ACTIVE").map((d) => d.name.toLowerCase()),
-  );
+  const domainsById = new Map(domains.map((d) => [d.id, d]));
 
   const accounts = mailboxes
     .filter((m) => m.status === "ACTIVE")
-    .filter((m) => activeDomains.has(m.address.split("@")[1]?.toLowerCase() ?? ""))
-    .map((m) => ({ address: m.address.toLowerCase(), passwordHash: m.passwordHash }));
+    .map((m) => {
+      const domain = domainsById.get(m.domainId);
+      if (!domain || domain.status !== "ACTIVE") return null;
+
+      const address = `${m.localPart}@${domain.name}`.toLowerCase();
+      return { address, passwordHash: m.passwordHash };
+    })
+    .filter((account): account is { address: string; passwordHash: string } => account !== null);
 
   return { accounts, aliases: [] };
 }
