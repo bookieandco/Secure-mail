@@ -1,0 +1,8 @@
+globals {
+  log /dev/stdout
+  error_log /dev/stderr
+}
+
+demo.example.test {
+  proxy http://demo-site:8080/
+}
