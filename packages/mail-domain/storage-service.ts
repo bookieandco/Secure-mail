@@ -1,5 +1,5 @@
 import type { StorageGrant, StorageNamespace, StoragePolicy } from '../mail-types/storage';
-import type { GetObjectInput, PutObjectInput, ProviderObject, StorageProvider } from '../mail-types/storage-provider';
+import type { GetObjectInput, PutObjectInput, StorageObject as ProviderObject, StorageProvider } from '../mail-types/storage-provider';
 import { authorizeStorageRequest } from './storage-policy';
 import { assertQuotaForWrite, assertVersioningDelete, assertVersioningWrite } from './storage-service-guards';
 
