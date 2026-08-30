@@ -1,15 +1,15 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import type { VerifiedLinuxLaunchPlan } from './linux-sandbox-enforcement';
-import { assertIsolationVerified } from './linux-sandbox-enforcement';
+import type { EnforcedLinuxLaunchPlan } from './linux-sandbox-enforcement-preflight';
+import { assertEnforcementVerified } from './linux-sandbox-enforcement-preflight';
 import { buildLinuxSandboxCommand, type LinuxSandboxCommand } from './linux-sandbox-command';
 
 export interface LinuxSandboxExecutor {
-  spawn(plan: VerifiedLinuxLaunchPlan): ChildProcess;
+  spawn(plan: EnforcedLinuxLaunchPlan): ChildProcess;
 }
 
 export class VerifiedLinuxSandboxExecutor implements LinuxSandboxExecutor {
-  spawn(plan: VerifiedLinuxLaunchPlan): ChildProcess {
-    assertIsolationVerified(plan);
+  spawn(plan: EnforcedLinuxLaunchPlan): ChildProcess {
+    assertEnforcementVerified(plan);
     const command: LinuxSandboxCommand = buildLinuxSandboxCommand(plan);
     return spawn(command.executable, [...command.args], {
       cwd: plan.cwd,
