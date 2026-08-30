@@ -33,9 +33,9 @@ export class S3SdkStorageApi implements S3StorageApi {
   }
 
   async headObject(input: Parameters<S3StorageApi['headObject']>[0]) {
-    const sizeBytes = resultSize(await this.options.client.headObject({ Bucket: this.options.bucket, Key: input.key, VersionId: input.versionId }));
-    if (sizeBytes > this.options.maxObjectBytes) throw new Error('object_too_large');
     const result = await this.options.client.headObject({ Bucket: this.options.bucket, Key: input.key, VersionId: input.versionId });
+    const sizeBytes = resultSize(result);
+    if (sizeBytes > this.options.maxObjectBytes) throw new Error('object_too_large');
     return { sizeBytes, contentType: result.ContentType, etag: result.ETag ?? '', versionId: result.VersionId };
   }
 
