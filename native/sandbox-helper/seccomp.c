@@ -6,12 +6,13 @@
 #include <linux/seccomp.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
 static int syscall_number(const char *name) {
-#define MAP_SYSCALL(n) if (__builtin_strcmp(name, #n) == 0) return SYS_##n
+#define MAP_SYSCALL(n) if (strcmp(name, #n) == 0) return SYS_##n
     MAP_SYSCALL(read); MAP_SYSCALL(write); MAP_SYSCALL(close); MAP_SYSCALL(exit); MAP_SYSCALL(exit_group);
     MAP_SYSCALL(brk); MAP_SYSCALL(mmap); MAP_SYSCALL(munmap); MAP_SYSCALL(mprotect); MAP_SYSCALL(rt_sigaction);
     MAP_SYSCALL(rt_sigprocmask); MAP_SYSCALL(futex); MAP_SYSCALL(clock_gettime); MAP_SYSCALL(nanosleep);
@@ -19,11 +20,22 @@ static int syscall_number(const char *name) {
     return -1;
 }
 
+int secure_mail_seccomp_profile(const char *profile, const char *const **syscalls, size_t *count) {
+    static const char *const runtime_v1[] = {
+        "read", "write", "close", "exit", "exit_group", "brk", "mmap", "munmap",
+        "mprotect", "rt_sigaction", "rt_sigprocmask", "futex", "clock_gettime", "nanosleep"
+    };
+    if (!profile || !syscalls || !count) { errno = EINVAL; return -1; }
+    if (strcmp(profile, "secure-mail-runtime-v1") != 0) { errno = ENOENT; return -1; }
+    *syscalls = runtime_v1;
+    *count = sizeof(runtime_v1) / sizeof(runtime_v1[0]);
+    return 0;
+}
+
 int secure_mail_seccomp_install(const char *const *syscalls, size_t count) {
     if (!syscalls || count == 0 || count > 128) { errno = EINVAL; return -1; }
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) return -1;
-
-    struct sock_filter filter[131];
+    struct sock_filter filter[260];
     size_t i = 0;
     filter[i++] = (struct sock_filter)BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, arch));
 #if defined(__x86_64__)
