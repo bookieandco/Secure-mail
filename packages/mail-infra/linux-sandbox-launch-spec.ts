@@ -1,8 +1,11 @@
 import type { NativeSandboxLaunchSpec } from './native-os-sandbox';
 
+export type LinuxSeccompProfile = 'secure-mail-runtime-v1';
+
 export interface LinuxKernelIsolationSpec {
   readonly namespaces: readonly ('mount' | 'pid' | 'network' | 'ipc' | 'uts' | 'user')[];
   readonly seccomp: 'REQUIRED';
+  readonly seccompProfile: LinuxSeccompProfile;
   readonly resourceLimits: { readonly cpuMs: number; readonly memoryBytes: number; readonly pids: number; };
   readonly filesystemRoot: 'WORKDIR_ONLY' | 'READ_ONLY';
   readonly network: 'DENY';
@@ -24,6 +27,7 @@ export function createLinuxSandboxLaunchPlan(spec: NativeSandboxLaunchSpec, limi
     isolation: {
       namespaces: ['mount', 'pid', 'network', 'ipc', 'uts', 'user'],
       seccomp: 'REQUIRED',
+      seccompProfile: 'secure-mail-runtime-v1',
       resourceLimits: limits,
       filesystemRoot: spec.filesystem,
       network: 'DENY',
