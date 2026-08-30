@@ -1,10 +1,32 @@
+#include "cgroup_v2.h"
+#include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 
-int main(void) {
+int main(int argc, char **argv) {
 #if defined(SECURE_MAIL_LINUX)
-    fputs("secure-mail-sandbox-helper: enforcement backend not installed\n", stderr);
+    if (argc != 7) {
+        fputs("secure-mail-sandbox-helper: invalid invocation\n", stderr);
+        return 78;
+    }
+    char *end = NULL;
+    long pid = strtol(argv[2], &end, 10);
+    if (*end != '\0' || pid < 1 || pid > 2147483647L) return 78;
+    unsigned long long memory = strtoull(argv[3], &end, 10);
+    if (*end != '\0' || memory == 0) return 78;
+    unsigned long long cpu = strtoull(argv[4], &end, 10);
+    if (*end != '\0' || cpu == 0) return 78;
+    unsigned long pids = strtoul(argv[5], &end, 10);
+    if (*end != '\0' || pids == 0 || pids > 4294967295UL) return 78;
+    if (argv[6][0] != 'D' || argv[6][1] != 'E' || argv[6][2] != 'N' || argv[6][3] != 'Y' || argv[6][4] != '\0') return 78;
+    if (secure_mail_cgroup_apply(argv[1], "secure-mail-native", (int)pid, memory, cpu, (unsigned int)pids) != 0) {
+        perror("secure-mail-sandbox-helper: cgroup enforcement failed");
+        return 78;
+    }
+    return 0;
 #else
+    (void)argc; (void)argv;
     fputs("secure-mail-sandbox-helper: unsupported platform\n", stderr);
-#endif
     return 78;
+#endif
 }
