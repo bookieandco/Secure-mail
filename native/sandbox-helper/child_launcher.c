@@ -2,6 +2,7 @@
 #include "child_launcher.h"
 #include "cgroup_v2.h"
 #include "seccomp.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -17,8 +18,10 @@ static void fail_child(int fd) {
     _exit(78);
 }
 
-int secure_mail_spawn_restricted(const char *cgroup_root, const char *executable, char *const argv[], const char *cwd, uint64_t memory_bytes, uint64_t cpu_ms, uint32_t pids) {
-    if (!cgroup_root || !executable || !argv || !argv[0] || !cwd || memory_bytes == 0 || cpu_ms == 0 || pids == 0) { errno = EINVAL; return -1; }
+int secure_mail_spawn_restricted(const char *cgroup_root, const char *executable, char *const argv[], const char *cwd, uint64_t memory_bytes, uint64_t cpu_ms, uint32_t pids, const char *seccomp_profile) {
+    if (!cgroup_root || !executable || !argv || !argv[0] || !cwd || !seccomp_profile || memory_bytes == 0 || cpu_ms == 0 || pids == 0) { errno = EINVAL; return -1; }
+    const char *const *syscalls = NULL; size_t syscall_count = 0;
+    if (secure_mail_seccomp_profile(seccomp_profile, &syscalls, &syscall_count) != 0) return -1;
     int admission[2];
     if (pipe2(admission, O_CLOEXEC) != 0) return -1;
     pid_t child = fork();
@@ -27,8 +30,7 @@ int secure_mail_spawn_restricted(const char *cgroup_root, const char *executable
         close(admission[0]);
         if (chdir(cwd) != 0) fail_child(admission[1]);
         if (secure_mail_cgroup_apply(cgroup_root, "secure-mail-native-child", getpid(), memory_bytes, cpu_ms, pids) != 0) fail_child(admission[1]);
-        static const char *const allowed[] = { "read", "write", "close", "exit", "exit_group", "brk", "mmap", "munmap", "mprotect", "rt_sigaction", "rt_sigprocmask", "futex", "clock_gettime", "nanosleep" };
-        if (secure_mail_seccomp_install(allowed, sizeof(allowed) / sizeof(allowed[0])) != 0) fail_child(admission[1]);
+        if (secure_mail_seccomp_install(syscalls, syscall_count) != 0) fail_child(admission[1]);
         execv(executable, argv);
         fail_child(admission[1]);
     }
