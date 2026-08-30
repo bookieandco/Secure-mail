@@ -1,4 +1,4 @@
-import type { StorageProvider } from '../mail-types/storage-provider';
+import type { GetObjectInput, ListObjectsInput, PutObjectInput, StorageObject, StorageProvider } from '../mail-types/storage-provider';
 import type { StorageProviderCapabilities, StorageProviderHealth } from '../mail-types/storage-provider-capabilities';
 import type { StorageAuditSink } from '../mail-types/storage-audit';
 import { StorageBackendLifecycle } from './storage-backend-lifecycle';
@@ -10,9 +10,7 @@ export interface StorageRuntimeBackend {
   health(): Promise<StorageProviderHealth>;
 }
 
-export interface StorageRuntimeOptions {
-  readonly audit: StorageAuditSink;
-}
+export interface StorageRuntimeOptions { readonly audit: StorageAuditSink; }
 
 export class StorageRuntime {
   private readonly registry = new StorageBackendRegistry();
@@ -29,26 +27,29 @@ export class StorageRuntime {
   }
 
   async refresh(name: string): Promise<StorageProviderHealth> {
-    const lifecycle = this.lifecycles.get(name);
-    if (!lifecycle) throw new Error('storage_provider_not_registered');
+    const lifecycle = this.lifecycle(name);
     return lifecycle.refreshHealth();
   }
 
-  provider(name: string): StorageProvider {
-    const lifecycle = this.lifecycles.get(name);
-    if (!lifecycle) throw new Error('storage_provider_not_registered');
-    return lifecycle.provider();
+  drain(name: string): void { this.lifecycle(name).beginDrain(); }
+  stop(name: string): void { this.lifecycle(name).stop(); }
+
+  async put(name: string, input: PutObjectInput): Promise<StorageObject> { return this.active(name).put(input); }
+  async get(name: string, input: GetObjectInput): Promise<StorageObject & { readonly body: Uint8Array }> { return this.active(name).get(input); }
+  async head(name: string, input: GetObjectInput): Promise<StorageObject> { return this.active(name).head(input); }
+  async list(name: string, input: ListObjectsInput): Promise<readonly StorageObject[]> { return this.active(name).list(input); }
+  async delete(name: string, input: GetObjectInput): Promise<void> { return this.active(name).delete(input); }
+
+  private active(name: string): StorageProvider {
+    const lifecycle = this.lifecycle(name);
+    const provider = lifecycle.provider();
+    if (this.registry.get(name) !== provider) throw new Error('storage_provider_registry_mismatch');
+    return provider;
   }
 
-  drain(name: string): void {
+  private lifecycle(name: string): StorageBackendLifecycle {
     const lifecycle = this.lifecycles.get(name);
     if (!lifecycle) throw new Error('storage_provider_not_registered');
-    lifecycle.beginDrain();
-  }
-
-  stop(name: string): void {
-    const lifecycle = this.lifecycles.get(name);
-    if (!lifecycle) throw new Error('storage_provider_not_registered');
-    lifecycle.stop();
+    return lifecycle;
   }
 }
